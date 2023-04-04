@@ -2,6 +2,10 @@ defmodule Servy.Handler do
   @moduledoc """
   Handles HTTP requests.
   """
+  import Servy.Plugins, only: [rewrite_path: 1, log: 1, track: 1]
+  import Servy.Parser, only: [parse: 1]
+  import Servy.FileHandler, only: [handle_file: 2]
+  @pages_path Path.expand("../../pages", __DIR__)
 
   @doc """
   Transform the request into a response
@@ -9,10 +13,10 @@ defmodule Servy.Handler do
   def handle(requets) do
     requets
     |> parse
-    |> rewrite_path
-    |> log
+    |> rewrite_path()
+    |> log()
     |> route
-    |> track
+    |> track()
     |> emoji
     |> format_response
   end
@@ -25,44 +29,12 @@ defmodule Servy.Handler do
 
   def emoji(conv), do: conv
 
-  def track(%{status: 404, path: path} = conv) do
-    IO.puts("Warning: #{path} is on the loose!")
-    conv
-  end
-
-  @doc """
-  Logs 404 requests
-  """
-  def track(conv), do: conv
-
-  def rewrite_path(%{path: "/wildlife"} = conv) do
-    %{conv | path: "/wildthings"}
-  end
-
-  def rewrite_path(%{path: "/bears?id=" <> id} = conv) do
-    %{conv | path: "/bears/#{id}"}
-  end
-
-  def rewrite_path(conv), do: conv
-
-  def log(conv), do: IO.inspect(conv)
-
-  def parse(request) do
-    [method, path, _version] =
-      request
-      |> String.split("\n")
-      |> List.first()
-      |> String.split(" ")
-
-    %{method: method, path: path, resp_body: "", status: nil}
-  end
-
   # def route(conv) do
   #   route(conv, conv.method, conv.path)
   # end
 
   def route(%{method: "GET", path: "/bears/new"} = conv) do
-    Path.expand("../../pages", __DIR__)
+    @pages_path
     |> Path.join("form.html")
     |> File.read()
     |> handle_file(conv)
@@ -81,13 +53,11 @@ defmodule Servy.Handler do
   end
 
   def route(%{method: "GET", path: "/about"} = conv) do
-    Path.expand("../../pages", __DIR__)
+    @pages_path
     |> Path.join("about.html")
     |> File.read()
     |> handle_file(conv)
   end
-
-  @pages_path Path.expand("../../pages", __DIR__)
 
   def route(%{method: "GET", path: "/pages/" <> file} = conv) do
     @pages_path
@@ -103,32 +73,6 @@ defmodule Servy.Handler do
   def route(%{method: "DELETE", path: "/bears/" <> _id} = conv) do
     %{conv | status: 403, resp_body: "Bears must never be deleted!"}
   end
-
-  def handle_file({:ok, content}, conv) do
-    %{conv | status: 200, resp_body: content}
-  end
-
-  def handle_file({:error, :enoent}, conv) do
-    %{conv | status: 404, resp_body: "File not found!"}
-  end
-
-  def handle_file({:error, reason}, conv) do
-    %{conv | status: 500, resp_body: "File error: #{reason}"}
-  end
-
-  # def route(%{method: "GET", path: "/about"} = conv) do
-  #   file =
-  #     Path.expand("../../pages", __DIR__)
-  #     |> Path.join("about.html")
-
-  #   case File.read(file) do
-  #     {:ok, content} -> %{conv | status: 200, resp_body: content}
-  #     {:error, :enoent} -> %{conv | status: 404, resp_body: "File not found!"}
-  #     {:error, reason} -> %{conv | status: 500, resp_body: "File error: #{reason}"}
-  #   end
-  # end
-
-  ##
 
   def format_response(%{resp_body: resp_body, status: status}) do
     """
